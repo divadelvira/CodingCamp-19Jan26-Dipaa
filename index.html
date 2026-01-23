@@ -1,11 +1,63 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="id">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>My To Do List</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
-    
+
+    <div class="main-card">
+        <header>
+            <h1>My To Do List</h1>
+            <p>Atur Jadwal dengan Sistem To Do List ini yuk!</p>
+        </header>
+
+        <form id="todo-form">
+            <div class="form-layout">
+                <div class="col-left">
+                    <input type="text" id="todo-input" class="input-field" placeholder="Nama Kegiatan" required>
+                    <textarea id="desc-input" class="input-field area-field" placeholder="Deskripsi Kegiatan" rows="1"></textarea>
+                </div>
+
+                <div class="col-right">
+                    <div class="date-group">
+                        <label>Start date:</label>
+                        <input type="date" id="start-date-input" class="input-field date-field" required>
+                    </div>
+                    <div class="date-group">
+                        <label>Deadline:</label>
+                        <input type="date" id="due-date-input" class="input-field date-field" required>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="add-btn">
+                <i class="fas fa-plus"></i> Tambah Kegiatan
+            </button>
+        </form>
+
+        <div class="divider"></div>
+
+        <div class="controls">
+            <select class="filter-select">
+                <option value="all">Semua Kegiatan</option>
+                <option value="completed">Selesai</option>
+                <option value="uncompleted">Belum Selesai</option>
+            </select>
+            <button id="delete-all-btn" class="delete-all-btn">Hapus Semua</button>
+        </div>
+
+        <div class="todo-container">
+            <ul class="todo-list">
+                </ul>
+            <p id="empty-msg" class="empty-state">Belum ada kegiatan, yuk tambah sekarang! ✨</p>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
 </body>
 </html>
