@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My To Do List</title>
+    <title>Premium To Do List</title>
     <link rel="stylesheet" href="css/style.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -12,25 +12,50 @@
 
     <div class="main-card">
         <header>
-            <h1>My To Do List</h1>
-            <p>Atur Jadwal dengan Sistem To Do List ini yuk!</p>
+            <div class="header-text">
+                <h1>My To Do List</h1>
+                <p>Atur jadwal kegiatan secara elegan dan premium ✨</p>
+            </div>
+            <button id="theme-toggle" class="theme-toggle-btn" aria-label="Ganti Tema">
+                <i class="fas fa-moon"></i>
+            </button>
         </header>
+
+        <!-- Progress Dashboard -->
+        <div class="progress-section">
+            <div class="progress-info">
+                <span class="progress-title">Progres Kegiatan</span>
+                <span id="progress-percent">0% selesai</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div id="progress-bar-fill" class="progress-bar-fill"></div>
+            </div>
+            <p id="progress-motivate" class="progress-motivate">Ayo mulai harimu dengan produktif! 🚀</p>
+        </div>
 
         <form id="todo-form">
             <div class="form-layout">
                 <div class="col-left">
                     <input type="text" id="todo-input" class="input-field" placeholder="Nama Kegiatan" required>
-                    <textarea id="desc-input" class="input-field area-field" placeholder="Deskripsi Kegiatan" rows="1"></textarea>
+                    <textarea id="desc-input" class="input-field area-field" placeholder="Deskripsi Kegiatan" rows="2"></textarea>
                 </div>
 
                 <div class="col-right">
-                    <div class="date-group">
-                        <label>Start date:</label>
-                        <input type="date" id="start-date-input" class="input-field date-field" required>
+                    <div class="form-group">
+                        <label for="start-date-input">Start Date:</label>
+                        <input type="date" id="start-date-input" class="input-field" required>
                     </div>
-                    <div class="date-group">
-                        <label>Deadline:</label>
-                        <input type="date" id="due-date-input" class="input-field date-field" required>
+                    <div class="form-group">
+                        <label for="due-date-input">Deadline:</label>
+                        <input type="date" id="due-date-input" class="input-field" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="priority-input">Prioritas:</label>
+                        <select id="priority-input" class="input-field" required>
+                            <option value="low">Rendah (Low)</option>
+                            <option value="medium" selected>Sedang (Medium)</option>
+                            <option value="high">Tinggi (High)</option>
+                        </select>
                     </div>
                 </div>
             </div>
@@ -42,19 +67,94 @@
 
         <div class="divider"></div>
 
+        <!-- Search & Filter Controls -->
+        <div class="filter-search-container">
+            <div class="search-box">
+                <i class="fas fa-search search-icon"></i>
+                <input type="text" id="search-input" class="search-input" placeholder="Cari kegiatan...">
+            </div>
+            <div class="filter-sort-group">
+                <select class="filter-select" id="filter-select">
+                    <option value="all">Semua Kegiatan</option>
+                    <option value="completed">Selesai</option>
+                    <option value="uncompleted">Belum Selesai</option>
+                </select>
+                <select class="sort-select" id="sort-select">
+                    <option value="newest">Terbaru</option>
+                    <option value="oldest">Terlama</option>
+                    <option value="due-soon">Deadline Terdekat</option>
+                    <option value="priority-desc">Prioritas Tertinggi</option>
+                </select>
+            </div>
+        </div>
+
         <div class="controls">
-            <select class="filter-select">
-                <option value="all">Semua Kegiatan</option>
-                <option value="completed">Selesai</option>
-                <option value="uncompleted">Belum Selesai</option>
-            </select>
+            <span class="controls-label">Daftar Kegiatan</span>
             <button id="delete-all-btn" class="delete-all-btn">Hapus Semua</button>
         </div>
 
         <div class="todo-container">
             <ul class="todo-list">
-                </ul>
+                <!-- Todo list items will be injected here -->
+            </ul>
             <p id="empty-msg" class="empty-state">Belum ada kegiatan, yuk tambah sekarang! ✨</p>
+        </div>
+    </div>
+
+    <!-- Modal Edit Kustom -->
+    <div class="modal-backdrop" id="edit-modal-backdrop">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title">Edit Kegiatan</h3>
+                <button class="modal-close-btn" id="edit-modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="edit-title-input">Nama Kegiatan</label>
+                    <input type="text" id="edit-title-input" class="input-field" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-desc-input">Deskripsi</label>
+                    <textarea id="edit-desc-input" class="input-field area-field" rows="3"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="edit-start-input">Start Date</label>
+                    <input type="date" id="edit-start-input" class="input-field" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-due-input">Deadline</label>
+                    <input type="date" id="edit-due-input" class="input-field" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-priority-input">Prioritas</label>
+                    <select id="edit-priority-input" class="input-field" required>
+                        <option value="low">Rendah (Low)</option>
+                        <option value="medium">Sedang (Medium)</option>
+                        <option value="high">Tinggi (High)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="edit-modal-cancel">Batal</button>
+                <button class="btn-primary" id="edit-modal-save">Simpan Perubahan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Konfirmasi Hapus Kustom -->
+    <div class="modal-backdrop" id="confirm-modal-backdrop">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="confirm-modal-title">Konfirmasi Hapus</h3>
+                <button class="modal-close-btn" id="confirm-modal-close"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <p class="confirm-message" id="confirm-modal-message">Apakah Anda yakin ingin menghapus kegiatan ini?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="confirm-modal-cancel">Batal</button>
+                <button class="btn-primary" id="confirm-modal-btn">Hapus</button>
+            </div>
         </div>
     </div>
 
