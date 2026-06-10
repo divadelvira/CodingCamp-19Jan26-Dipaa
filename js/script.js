@@ -24,12 +24,13 @@ import {
 // Ganti dengan konfigurasi Firebase Web App Anda
 // ==========================================
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyD9uEH08W6mgx5UUmBFxe_ft-_W5jpXnMI",
+    authDomain: "mytodolist-codingcamp-project.firebaseapp.com",
+    projectId: "mytodolist-codingcamp-project",
+    storageBucket: "mytodolist-codingcamp-project.firebasestorage.app",
+    messagingSenderId: "860371798604",
+    appId: "1:860371798604:web:5ac48f3b3033d3071d42e9",
+    measurementId: "G-M741WNM73K"
 };
 
 // Cek apakah konfigurasi Firebase sudah dimasukkan oleh pengguna
