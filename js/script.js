@@ -116,6 +116,45 @@ let editingTodoId = null;
 let confirmCallback = null;
 
 // ==========================================
+// EVENT LISTENERS (GLOBAL)
+// ==========================================
+
+// Theme Toggling
+themeToggleBtn.addEventListener("click", toggleTheme);
+
+// Tab switching
+tabLoginBtn.addEventListener("click", () => showForm("login"));
+tabRegisterBtn.addEventListener("click", () => showForm("register"));
+
+// Links navigation
+forgotPasswordLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    showForm("forgot");
+});
+backToLoginLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    showForm("login");
+});
+
+// Form Submissions
+loginForm.addEventListener("submit", handleLogin);
+registerForm.addEventListener("submit", handleRegister);
+forgotPasswordForm.addEventListener("submit", handleForgotPassword);
+logoutBtn.addEventListener("click", handleLogout);
+
+// Todo CRUD
+todoForm.addEventListener("submit", addTodo);
+todoList.addEventListener("click", handleAction);
+filterOption.addEventListener("change", renderTodos);
+sortOption.addEventListener("change", renderTodos);
+searchInput.addEventListener("input", renderTodos);
+deleteAllBtn.addEventListener("click", handleDeleteAll);
+
+// Modals closing
+confirmModalCancel.addEventListener("click", closeConfirmModal);
+confirmModalClose.addEventListener("click", closeConfirmModal);
+
+// ==========================================
 // INITIALIZE APPLICATION
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
@@ -198,8 +237,6 @@ function initFirebase() {
             }
         });
 
-        setupAuthEvents();
-
     } catch (error) {
         console.error("Firebase Init Error:", error);
         initOfflineMode();
@@ -224,49 +261,46 @@ function subscribeToFirestore(userId) {
     });
 }
 
-// Offline Mode Fallback
+// Offline Mode Fallback with Local Simulation
 function initOfflineMode() {
-    currentUser = null;
     currentCloudTodos = [];
     
-    // Hide auth section completely
-    authContainer.classList.add("hidden");
-    userStatusContainer.classList.add("hidden");
+    // Check if there is an active local user session
+    const savedLocalUser = localStorage.getItem("local_session_user");
+    if (savedLocalUser) {
+        currentUser = JSON.parse(savedLocalUser);
+        
+        // Show status
+        userEmailDisplay.textContent = currentUser.email;
+        userStatusContainer.classList.remove("hidden");
+        
+        // Show app content, hide Auth
+        authContainer.classList.add("hidden");
+        todoAppContent.classList.remove("hidden");
 
-    // Show app content
-    todoAppContent.classList.remove("hidden");
+        // Banner indicates local storage mode
+        connectionBanner.className = "connection-banner offline";
+        connectionStatusText.innerHTML = '<i class="fas fa-wifi-slash"></i> Mode Lokal (Tersimpan di Perangkat). Hubungkan ke Firebase untuk sinkronisasi cloud.';
+        connectionBanner.classList.remove("hidden");
 
-    // Banner indicates local storage mode
-    connectionBanner.className = "connection-banner offline";
-    connectionStatusText.innerHTML = '<i class="fas fa-wifi-slash"></i> Mode Lokal (Tersimpan di Perangkat). Hubungkan ke Firebase untuk sinkronisasi cloud.';
-    connectionBanner.classList.remove("hidden");
-
-    renderTodos();
-}
-
-// ==========================================
-// AUTHENTICATION FORMS NAVIGATION & SUBMISSION
-// ==========================================
-function setupAuthEvents() {
-    // Tab switching
-    tabLoginBtn.addEventListener("click", () => showForm("login"));
-    tabRegisterBtn.addEventListener("click", () => showForm("register"));
-
-    // Links navigation
-    forgotPasswordLink.addEventListener("click", (e) => {
-        e.preventDefault();
-        showForm("forgot");
-    });
-    backToLoginLink.addEventListener("click", (e) => {
-        e.preventDefault();
+        renderTodos();
+    } else {
+        currentUser = null;
+        
+        // Hide status and app content
+        userStatusContainer.classList.add("hidden");
+        todoAppContent.classList.add("hidden");
+        
+        // Show Auth UI (Starts with Login page)
+        authContainer.classList.remove("hidden");
         showForm("login");
-    });
 
-    // Form Submissions
-    loginForm.addEventListener("submit", handleLogin);
-    registerForm.addEventListener("submit", handleRegister);
-    forgotPasswordForm.addEventListener("submit", handleForgotPassword);
-    logoutBtn.addEventListener("click", handleLogout);
+        connectionBanner.className = "connection-banner offline";
+        connectionStatusText.innerHTML = '<i class="fas fa-lock"></i> Silakan masuk (Mode Lokal) untuk mengelola kegiatan Anda.';
+        connectionBanner.classList.remove("hidden");
+
+        renderTodos();
+    }
 }
 
 function showForm(formType) {
@@ -287,22 +321,38 @@ function showForm(formType) {
     }
 }
 
-// Login Account
+// Login Account (Firebase vs Local Simulation)
 function handleLogin(e) {
     e.preventDefault();
     const email = document.getElementById("login-email").value.trim();
     const password = document.getElementById("login-password").value;
 
-    signInWithEmailAndPassword(auth, email, password)
-        .then(() => {
+    if (isFirebaseSetup) {
+        signInWithEmailAndPassword(auth, email, password)
+            .then(() => {
+                loginForm.reset();
+            })
+            .catch((error) => {
+                showWarningModal("Gagal Masuk", translateAuthError(error.code));
+            });
+    } else {
+        // Local Authentication Simulation
+        const localUsers = JSON.parse(localStorage.getItem("local_users") || "{}");
+        if (localUsers[email] && localUsers[email] === password) {
+            currentUser = {
+                email: email,
+                uid: "local_" + email.replace(/[^a-zA-Z0-9]/g, "")
+            };
+            localStorage.setItem("local_session_user", JSON.stringify(currentUser));
             loginForm.reset();
-        })
-        .catch((error) => {
-            showWarningModal("Gagal Masuk", translateAuthError(error.code));
-        });
+            initOfflineMode();
+        } else {
+            showWarningModal("Gagal Masuk", "Email atau kata sandi salah (Mode Lokal).");
+        }
+    }
 }
 
-// Register Account
+// Register Account (Firebase vs Local Simulation)
 function handleRegister(e) {
     e.preventDefault();
     const email = document.getElementById("register-email").value.trim();
@@ -319,49 +369,94 @@ function handleRegister(e) {
         return;
     }
 
-    createUserWithEmailAndPassword(auth, email, password)
-        .then(async (userCredential) => {
-            // Send email verification (activation link)
-            await sendEmailVerification(userCredential.user);
+    if (isFirebaseSetup) {
+        createUserWithEmailAndPassword(auth, email, password)
+            .then(async (userCredential) => {
+                // Send email verification (activation link)
+                await sendEmailVerification(userCredential.user);
+                registerForm.reset();
+                showWarningModal(
+                    "Akun Berhasil Dibuat", 
+                    "Registrasi berhasil! Kami telah mengirimkan link aktivasi otomatis ke email: " + email + ". Silakan verifikasi email Anda untuk mengaktifkan akun."
+                );
+            })
+            .catch((error) => {
+                showWarningModal("Pendaftaran Gagal", translateAuthError(error.code));
+            });
+    } else {
+        // Local Registration Simulation
+        const localUsers = JSON.parse(localStorage.getItem("local_users") || "{}");
+        if (localUsers[email]) {
+            showWarningModal("Pendaftaran Gagal", "Email ini sudah terdaftar secara lokal!");
+        } else {
+            localUsers[email] = password;
+            localStorage.setItem("local_users", JSON.stringify(localUsers));
+            
+            // Auto Login
+            currentUser = {
+                email: email,
+                uid: "local_" + email.replace(/[^a-zA-Z0-9]/g, "")
+            };
+            localStorage.setItem("local_session_user", JSON.stringify(currentUser));
             registerForm.reset();
+            
             showWarningModal(
-                "Akun Berhasil Dibuat", 
-                "Registrasi berhasil! Kami telah mengirimkan link aktivasi otomatis ke email: " + email + ". Silakan verifikasi email Anda untuk mengaktifkan akun."
+                "Pendaftaran Sukses", 
+                "Akun lokal berhasil dibuat! Anda sekarang masuk secara otomatis dalam Mode Lokal."
             );
-        })
-        .catch((error) => {
-            showWarningModal("Pendaftaran Gagal", translateAuthError(error.code));
-        });
+            initOfflineMode();
+        }
+    }
 }
 
-// Forgot Password (Reset email)
+// Forgot Password (Reset email vs Local Simulation)
 function handleForgotPassword(e) {
     e.preventDefault();
     const email = document.getElementById("forgot-email").value.trim();
 
-    sendPasswordResetEmail(auth, email)
-        .then(() => {
+    if (isFirebaseSetup) {
+        sendPasswordResetEmail(auth, email)
+            .then(() => {
+                forgotPasswordForm.reset();
+                showWarningModal(
+                    "Link Reset Dikirim", 
+                    "Link reset kata sandi otomatis telah dikirim ke email: " + email + ". Silakan periksa kotak masuk atau spam email Anda."
+                );
+                showForm("login");
+            })
+            .catch((error) => {
+                showWarningModal("Gagal Mengirim Link", translateAuthError(error.code));
+            });
+    } else {
+        // Local Forgot Password Simulation
+        const localUsers = JSON.parse(localStorage.getItem("local_users") || "{}");
+        if (localUsers[email]) {
             forgotPasswordForm.reset();
             showWarningModal(
-                "Link Reset Dikirim", 
-                "Link reset kata sandi otomatis telah dikirim ke email: " + email + ". Silakan periksa kotak masuk atau spam email Anda."
+                "Link Reset (Simulasi)", 
+                "Link reset kata sandi simulasi telah dikirim ke email: " + email + ". (Hubungkan Firebase untuk mengirim email asli)."
             );
             showForm("login");
-        })
-        .catch((error) => {
-            showWarningModal("Gagal Mengirim Link", translateAuthError(error.code));
-        });
+        } else {
+            showWarningModal("Gagal", "Email tidak terdaftar secara lokal.");
+        }
+    }
 }
 
-// Logout Account
+// Logout Account (Firebase vs Local Simulation)
 function handleLogout() {
     showConfirmModal(
         "Keluar Akun",
         "Apakah Anda yakin ingin keluar dari akun Anda?",
         () => {
-            signOut(auth).catch((error) => {
-                console.error("Logout error:", error);
-            });
+            if (isFirebaseSetup) {
+                signOut(auth).catch((error) => {
+                    console.error("Logout error:", error);
+                });
+            } else {
+                localStorage.removeItem("local_session_user");
+                initOfflineMode();
+            }
         }
     );
 }
@@ -384,9 +479,6 @@ function translateAuthError(code) {
 // ==========================================
 // GENERAL APP CONTROLS (THEME, MODALS, VALIDATIONS)
 // ==========================================
-
-// Theme Toggling
-themeToggleBtn.addEventListener("click", toggleTheme);
 
 function initTheme() {
     const savedTheme = localStorage.getItem("theme") || "light";
@@ -444,19 +536,9 @@ confirmModalBtn.addEventListener("click", () => {
     closeConfirmModal();
 });
 
-confirmModalCancel.addEventListener("click", closeConfirmModal);
-confirmModalClose.addEventListener("click", closeConfirmModal);
-
 // ==========================================
 // TO DO DATA CRUD ACTIONS
 // ==========================================
-
-todoForm.addEventListener("submit", addTodo);
-todoList.addEventListener("click", handleAction);
-filterOption.addEventListener("change", renderTodos);
-sortOption.addEventListener("change", renderTodos);
-searchInput.addEventListener("input", renderTodos);
-deleteAllBtn.addEventListener("click", handleDeleteAll);
 
 // Add Todo
 async function addTodo(e) {
@@ -628,7 +710,13 @@ async function handleAction(e) {
             `Apakah Anda yakin ingin menghapus "${todo.title}"?`,
             async () => {
                 if (currentUser) {
-                    await deleteDoc(doc(db, "users", currentUser.uid, "todos", id.toString()));
+                    if (isFirebaseSetup) {
+                        await deleteDoc(doc(db, "users", currentUser.uid, "todos", id.toString()));
+                    } else {
+                        todos = todos.filter(t => t.id !== id);
+                        localStorage.setItem("todos_" + currentUser.email, JSON.stringify(todos));
+                        renderTodos();
+                    }
                 } else {
                     todos = todos.filter(t => t.id !== id);
                     localStorage.setItem("todos", JSON.stringify(todos));
@@ -641,7 +729,14 @@ async function handleAction(e) {
     if (btn.classList.contains("check")) {
         const todo = todos.find(t => t.id === id);
         if (currentUser) {
-            await setDoc(doc(db, "users", currentUser.uid, "todos", id.toString()), { completed: !todo.completed }, { merge: true });
+            if (isFirebaseSetup) {
+                await setDoc(doc(db, "users", currentUser.uid, "todos", id.toString()), { completed: !todo.completed }, { merge: true });
+            } else {
+                const idx = todos.findIndex(t => t.id === id);
+                todos[idx].completed = !todos[idx].completed;
+                localStorage.setItem("todos_" + currentUser.email, JSON.stringify(todos));
+                renderTodos();
+            }
         } else {
             const idx = todos.findIndex(t => t.id === id);
             todos[idx].completed = !todos[idx].completed;
@@ -695,13 +790,28 @@ editModalSave.addEventListener("click", async () => {
     }
 
     if (currentUser) {
-        await setDoc(doc(db, "users", currentUser.uid, "todos", editingTodoId.toString()), {
-            title,
-            desc,
-            start,
-            due,
-            priority
-        }, { merge: true });
+        if (isFirebaseSetup) {
+            await setDoc(doc(db, "users", currentUser.uid, "todos", editingTodoId.toString()), {
+                title,
+                desc,
+                start,
+                due,
+                priority
+            }, { merge: true });
+        } else {
+            let todos = getLocal();
+            const idx = todos.findIndex(t => t.id === editingTodoId);
+            if (idx !== -1) {
+                todos[idx].title = title;
+                todos[idx].desc = desc;
+                todos[idx].start = start;
+                todos[idx].due = due;
+                todos[idx].priority = priority;
+
+                localStorage.setItem("todos_" + currentUser.email, JSON.stringify(todos));
+                renderTodos();
+            }
+        }
     } else {
         let todos = getLocal();
         const idx = todos.findIndex(t => t.id === editingTodoId);
@@ -730,13 +840,18 @@ function handleDeleteAll() {
         "Apakah Anda yakin ingin menghapus SEMUA daftar kegiatan? Tindakan ini tidak dapat dibatalkan.",
         async () => {
             if (currentUser) {
-                const todosRef = collection(db, "users", currentUser.uid, "todos");
-                const querySnapshot = await getDocs(todosRef);
-                const batchPromises = [];
-                querySnapshot.forEach(doc => {
-                    batchPromises.push(deleteDoc(doc.ref));
-                });
-                await Promise.all(batchPromises);
+                if (isFirebaseSetup) {
+                    const todosRef = collection(db, "users", currentUser.uid, "todos");
+                    const querySnapshot = await getDocs(todosRef);
+                    const batchPromises = [];
+                    querySnapshot.forEach(doc => {
+                        batchPromises.push(deleteDoc(doc.ref));
+                    });
+                    await Promise.all(batchPromises);
+                } else {
+                    localStorage.setItem("todos_" + currentUser.email, JSON.stringify([]));
+                    renderTodos();
+                }
             } else {
                 localStorage.setItem("todos", JSON.stringify([]));
                 renderTodos();
@@ -773,7 +888,13 @@ function updateProgress(todos) {
 // Local Storage Helpers
 async function saveLocal(todo) {
     if (currentUser) {
-        await setDoc(doc(db, "users", currentUser.uid, "todos", todo.id.toString()), todo);
+        if (isFirebaseSetup) {
+            await setDoc(doc(db, "users", currentUser.uid, "todos", todo.id.toString()), todo);
+        } else {
+            let todos = getLocal();
+            todos.push(todo);
+            localStorage.setItem("todos_" + currentUser.email, JSON.stringify(todos));
+        }
     } else {
         let todos = getLocal();
         todos.push(todo);
@@ -783,7 +904,11 @@ async function saveLocal(todo) {
 
 function getLocal() {
     if (currentUser) {
-        return currentCloudTodos;
+        if (isFirebaseSetup) {
+            return currentCloudTodos;
+        } else {
+            return localStorage.getItem("todos_" + currentUser.email) ? JSON.parse(localStorage.getItem("todos_" + currentUser.email)) : [];
+        }
     }
     return localStorage.getItem("todos") ? JSON.parse(localStorage.getItem("todos")) : [];
 }
