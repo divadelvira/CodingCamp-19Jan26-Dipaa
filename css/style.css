@@ -131,6 +131,55 @@ header p {
     font-size: 0.95rem;
 }
 
+/* Header Controls & User Info */
+.header-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--todo-bg);
+    border: 1px solid var(--input-border);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    color: var(--text-title);
+    transition: all 0.3s ease;
+}
+
+.user-status.hidden {
+    display: none;
+}
+
+.user-email-display {
+    font-weight: 500;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.logout-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--btn-danger);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    transition: transform 0.2s;
+    padding: 2px;
+}
+
+.logout-btn:hover {
+    transform: scale(1.1);
+}
+
 /* Theme Toggle Button */
 .theme-toggle-btn {
     background: var(--todo-bg);
@@ -151,6 +200,128 @@ header p {
 .theme-toggle-btn:hover {
     transform: rotate(15deg) scale(1.05);
     border-color: var(--input-focus);
+}
+
+/* Connection Banner */
+.connection-banner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+    animation: slideIn 0.3s ease;
+}
+
+.connection-banner.online {
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--priority-low-text);
+    border: 1px solid var(--priority-low-border);
+}
+
+.connection-banner.offline {
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--priority-medium-text);
+    border: 1px solid var(--priority-medium-border);
+}
+
+.connection-banner.hidden {
+    display: none;
+}
+
+/* Auth Section UI */
+.auth-container {
+    background: var(--todo-bg);
+    border: 1px solid var(--todo-border);
+    border-radius: 20px;
+    padding: 24px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.02);
+    margin-bottom: 10px;
+    animation: slideIn 0.3s ease forwards;
+}
+
+.auth-container.hidden {
+    display: none;
+}
+
+.auth-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border-bottom: 2px solid var(--divider-color);
+    margin-bottom: 20px;
+}
+
+.auth-tab-btn {
+    background: transparent;
+    border: none;
+    padding: 10px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.3s ease;
+}
+
+.auth-tab-btn:hover {
+    color: var(--text-title);
+}
+
+.auth-tab-btn.active {
+    color: var(--input-focus);
+    border-bottom-color: var(--input-focus);
+}
+
+.auth-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    animation: fadeIn 0.3s ease forwards;
+}
+
+.auth-form.hidden {
+    display: none;
+}
+
+.auth-sub-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--text-title);
+    margin-bottom: 5px;
+}
+
+.auth-info-text {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+    margin-bottom: 5px;
+}
+
+.auth-link-text {
+    text-align: center;
+    font-size: 0.85rem;
+    margin-top: 10px;
+}
+
+.auth-link-text a {
+    color: var(--input-focus);
+    text-decoration: none;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+.auth-link-text a:hover {
+    opacity: 0.8;
+}
+
+/* App Main Content toggle wrapper */
+#todo-app-content.hidden {
+    display: none;
 }
 
 /* Progress Dashboard */
@@ -730,5 +901,14 @@ header p {
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
     }
 }

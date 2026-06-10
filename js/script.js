@@ -1,4 +1,48 @@
-// DOM Elements
+// Import Firebase Modules from official CDN
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+    getAuth, 
+    signInWithEmailAndPassword, 
+    createUserWithEmailAndPassword, 
+    sendPasswordResetEmail, 
+    sendEmailVerification, 
+    onAuthStateChanged, 
+    signOut 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import { 
+    getFirestore, 
+    doc, 
+    setDoc, 
+    deleteDoc, 
+    onSnapshot, 
+    collection, 
+    getDocs 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+// ==========================================
+// FIREBASE CONFIGURATION
+// Ganti dengan konfigurasi Firebase Web App Anda
+// ==========================================
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
+
+// Cek apakah konfigurasi Firebase sudah dimasukkan oleh pengguna
+const isFirebaseSetup = firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+
+// Firebase variables
+let auth = null;
+let db = null;
+let currentUser = null;
+let unsubscribeTodos = null;
+let currentCloudTodos = [];
+
+// DOM Elements - General
 const titleInput = document.getElementById("todo-input");
 const descInput = document.getElementById("desc-input");
 const startInput = document.getElementById("start-date-input");
@@ -19,6 +63,34 @@ const progressMotivate = document.getElementById("progress-motivate");
 
 // Theme element
 const themeToggleBtn = document.getElementById("theme-toggle");
+
+// Connection Banner
+const connectionBanner = document.getElementById("connection-banner");
+const connectionStatusText = document.getElementById("connection-status-text");
+
+// User Status in Header
+const userStatusContainer = document.getElementById("user-status-container");
+const userEmailDisplay = document.getElementById("user-email-display");
+const logoutBtn = document.getElementById("logout-btn");
+
+// App Wrapper
+const todoAppContent = document.getElementById("todo-app-content");
+
+// Auth Form Wrapper
+const authContainer = document.getElementById("auth-container");
+
+// Auth Tabs
+const tabLoginBtn = document.getElementById("tab-login-btn");
+const tabRegisterBtn = document.getElementById("tab-register-btn");
+
+// Auth Forms
+const loginForm = document.getElementById("login-form");
+const registerForm = document.getElementById("register-form");
+const forgotPasswordForm = document.getElementById("forgot-password-form");
+
+// Auth Links
+const forgotPasswordLink = document.getElementById("forgot-password-link");
+const backToLoginLink = document.getElementById("back-to-login-link");
 
 // Edit Modal elements
 const editModalBackdrop = document.getElementById("edit-modal-backdrop");
@@ -43,22 +115,275 @@ const confirmModalMessage = document.getElementById("confirm-modal-message");
 let editingTodoId = null;
 let confirmCallback = null;
 
-// Event Listeners
+// ==========================================
+// INITIALIZE APPLICATION
+// ==========================================
 document.addEventListener("DOMContentLoaded", () => {
     initTheme();
-    // Set default start date to today
+    
+    // Set default dates
     const todayStr = new Date().toISOString().split('T')[0];
     startInput.value = todayStr;
     dueInput.value = todayStr;
-    renderTodos();
+
+    if (isFirebaseSetup) {
+        initFirebase();
+    } else {
+        initOfflineMode();
+    }
 });
 
-todoForm.addEventListener("submit", addTodo);
-todoList.addEventListener("click", handleAction);
-filterOption.addEventListener("change", renderTodos);
-sortOption.addEventListener("change", renderTodos);
-searchInput.addEventListener("input", renderTodos);
-deleteAllBtn.addEventListener("click", handleDeleteAll);
+// ==========================================
+// FIREBASE SETUP & LOGIC
+// ==========================================
+function initFirebase() {
+    try {
+        const app = initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        // Connection banner shows connecting status
+        connectionBanner.className = "connection-banner offline";
+        connectionStatusText.textContent = "Menghubungkan ke Cloud Sync...";
+        connectionBanner.classList.remove("hidden");
+
+        // Listen for authentication changes
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                
+                // Show User status in header
+                userEmailDisplay.textContent = user.email;
+                userStatusContainer.classList.remove("hidden");
+                
+                // Hide Auth UI and show App Content
+                authContainer.classList.add("hidden");
+                todoAppContent.classList.remove("hidden");
+
+                // Update connection status
+                if (user.emailVerified) {
+                    connectionBanner.className = "connection-banner online";
+                    connectionStatusText.innerHTML = '<i class="fas fa-cloud"></i> Tersambung ke Cloud Sync (Akun Aktif)';
+                } else {
+                    connectionBanner.className = "connection-banner offline";
+                    connectionStatusText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Akun belum aktif. Silakan verifikasi email Anda!';
+                }
+
+                // Subscribe to firestore data
+                subscribeToFirestore(user.uid);
+
+            } else {
+                currentUser = null;
+                currentCloudTodos = [];
+                
+                // Unsubscribe from Firestore listeners
+                if (unsubscribeTodos) {
+                    unsubscribeTodos();
+                    unsubscribeTodos = null;
+                }
+
+                // Hide User status and app content
+                userStatusContainer.classList.add("hidden");
+                todoAppContent.classList.add("hidden");
+
+                // Show Auth UI
+                authContainer.classList.remove("hidden");
+                showForm("login");
+
+                connectionBanner.className = "connection-banner offline";
+                connectionStatusText.innerHTML = '<i class="fas fa-lock"></i> Silakan masuk untuk sinkronisasi cloud.';
+                connectionBanner.classList.remove("hidden");
+
+                renderTodos();
+            }
+        });
+
+        setupAuthEvents();
+
+    } catch (error) {
+        console.error("Firebase Init Error:", error);
+        initOfflineMode();
+    }
+}
+
+// Syncing from Cloud Firestore
+function subscribeToFirestore(userId) {
+    if (unsubscribeTodos) unsubscribeTodos();
+
+    const todosRef = collection(db, "users", userId, "todos");
+    unsubscribeTodos = onSnapshot(todosRef, (snapshot) => {
+        const todos = [];
+        snapshot.forEach((doc) => {
+            todos.push({ id: parseInt(doc.id), ...doc.data() });
+        });
+        currentCloudTodos = todos;
+        renderTodos();
+    }, (error) => {
+        console.error("Firestore Subscribe Error:", error);
+        showWarningModal("Sinkronisasi Gagal", "Gagal memuat data dari cloud database. Silakan periksa koneksi internet Anda.");
+    });
+}
+
+// Offline Mode Fallback
+function initOfflineMode() {
+    currentUser = null;
+    currentCloudTodos = [];
+    
+    // Hide auth section completely
+    authContainer.classList.add("hidden");
+    userStatusContainer.classList.add("hidden");
+
+    // Show app content
+    todoAppContent.classList.remove("hidden");
+
+    // Banner indicates local storage mode
+    connectionBanner.className = "connection-banner offline";
+    connectionStatusText.innerHTML = '<i class="fas fa-wifi-slash"></i> Mode Lokal (Tersimpan di Perangkat). Hubungkan ke Firebase untuk sinkronisasi cloud.';
+    connectionBanner.classList.remove("hidden");
+
+    renderTodos();
+}
+
+// ==========================================
+// AUTHENTICATION FORMS NAVIGATION & SUBMISSION
+// ==========================================
+function setupAuthEvents() {
+    // Tab switching
+    tabLoginBtn.addEventListener("click", () => showForm("login"));
+    tabRegisterBtn.addEventListener("click", () => showForm("register"));
+
+    // Links navigation
+    forgotPasswordLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        showForm("forgot");
+    });
+    backToLoginLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        showForm("login");
+    });
+
+    // Form Submissions
+    loginForm.addEventListener("submit", handleLogin);
+    registerForm.addEventListener("submit", handleRegister);
+    forgotPasswordForm.addEventListener("submit", handleForgotPassword);
+    logoutBtn.addEventListener("click", handleLogout);
+}
+
+function showForm(formType) {
+    loginForm.classList.add("hidden");
+    registerForm.classList.add("hidden");
+    forgotPasswordForm.classList.add("hidden");
+    tabLoginBtn.classList.remove("active");
+    tabRegisterBtn.classList.remove("active");
+
+    if (formType === "login") {
+        loginForm.classList.remove("hidden");
+        tabLoginBtn.classList.add("active");
+    } else if (formType === "register") {
+        registerForm.classList.remove("hidden");
+        tabRegisterBtn.classList.add("active");
+    } else if (formType === "forgot") {
+        forgotPasswordForm.classList.remove("hidden");
+    }
+}
+
+// Login Account
+function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById("login-email").value.trim();
+    const password = document.getElementById("login-password").value;
+
+    signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+            loginForm.reset();
+        })
+        .catch((error) => {
+            showWarningModal("Gagal Masuk", translateAuthError(error.code));
+        });
+}
+
+// Register Account
+function handleRegister(e) {
+    e.preventDefault();
+    const email = document.getElementById("register-email").value.trim();
+    const password = document.getElementById("register-password").value;
+    const confirmPassword = document.getElementById("register-confirm-password").value;
+
+    if (password.length < 6) {
+        showWarningModal("Pendaftaran Gagal", "Kata sandi minimal terdiri dari 6 karakter!");
+        return;
+    }
+
+    if (password !== confirmPassword) {
+        showWarningModal("Pendaftaran Gagal", "Konfirmasi kata sandi tidak cocok!");
+        return;
+    }
+
+    createUserWithEmailAndPassword(auth, email, password)
+        .then(async (userCredential) => {
+            // Send email verification (activation link)
+            await sendEmailVerification(userCredential.user);
+            registerForm.reset();
+            showWarningModal(
+                "Akun Berhasil Dibuat", 
+                "Registrasi berhasil! Kami telah mengirimkan link aktivasi otomatis ke email: " + email + ". Silakan verifikasi email Anda untuk mengaktifkan akun."
+            );
+        })
+        .catch((error) => {
+            showWarningModal("Pendaftaran Gagal", translateAuthError(error.code));
+        });
+}
+
+// Forgot Password (Reset email)
+function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById("forgot-email").value.trim();
+
+    sendPasswordResetEmail(auth, email)
+        .then(() => {
+            forgotPasswordForm.reset();
+            showWarningModal(
+                "Link Reset Dikirim", 
+                "Link reset kata sandi otomatis telah dikirim ke email: " + email + ". Silakan periksa kotak masuk atau spam email Anda."
+            );
+            showForm("login");
+        })
+        .catch((error) => {
+            showWarningModal("Gagal Mengirim Link", translateAuthError(error.code));
+        });
+}
+
+// Logout Account
+function handleLogout() {
+    showConfirmModal(
+        "Keluar Akun",
+        "Apakah Anda yakin ingin keluar dari akun Anda?",
+        () => {
+            signOut(auth).catch((error) => {
+                console.error("Logout error:", error);
+            });
+        }
+    );
+}
+
+// Translate Firebase Errors to Indonesian
+function translateAuthError(code) {
+    switch(code) {
+        case "auth/invalid-email": return "Format alamat email tidak valid.";
+        case "auth/user-disabled": return "Akun ini telah dinonaktifkan.";
+        case "auth/user-not-found": return "Akun tidak ditemukan. Silakan daftarkan akun baru.";
+        case "auth/wrong-password": return "Kata sandi salah. Silakan coba lagi.";
+        case "auth/email-already-in-use": return "Alamat email ini sudah terdaftar. Silakan masuk atau gunakan email lain.";
+        case "auth/weak-password": return "Kata sandi terlalu lemah. Gunakan minimal 6 karakter.";
+        case "auth/invalid-credential": return "Email atau kata sandi salah. Silakan periksa kembali.";
+        case "auth/missing-password": return "Kata sandi wajib diisi.";
+        default: return "Terjadi kesalahan sistem. Silakan coba lagi nanti (" + code + ").";
+    }
+}
+
+// ==========================================
+// GENERAL APP CONTROLS (THEME, MODALS, VALIDATIONS)
+// ==========================================
 
 // Theme Toggling
 themeToggleBtn.addEventListener("click", toggleTheme);
@@ -90,10 +415,8 @@ function updateThemeIcon(theme) {
 function showConfirmModal(title, message, callback) {
     confirmModalTitle.textContent = title;
     confirmModalMessage.textContent = message;
-    confirmModalBtn.textContent = "Hapus";
+    confirmModalBtn.textContent = "Lanjutkan";
     confirmModalBtn.style.background = "var(--btn-danger)";
-    
-    // Reset Cancel Button
     confirmModalCancel.style.display = "block";
     
     confirmCallback = callback;
@@ -105,8 +428,6 @@ function showWarningModal(title, message) {
     confirmModalMessage.textContent = message;
     confirmModalBtn.textContent = "OK";
     confirmModalBtn.style.background = "var(--input-focus)";
-    
-    // Hide Cancel Button
     confirmModalCancel.style.display = "none";
     
     confirmCallback = closeConfirmModal;
@@ -126,8 +447,19 @@ confirmModalBtn.addEventListener("click", () => {
 confirmModalCancel.addEventListener("click", closeConfirmModal);
 confirmModalClose.addEventListener("click", closeConfirmModal);
 
+// ==========================================
+// TO DO DATA CRUD ACTIONS
+// ==========================================
+
+todoForm.addEventListener("submit", addTodo);
+todoList.addEventListener("click", handleAction);
+filterOption.addEventListener("change", renderTodos);
+sortOption.addEventListener("change", renderTodos);
+searchInput.addEventListener("input", renderTodos);
+deleteAllBtn.addEventListener("click", handleDeleteAll);
+
 // Add Todo
-function addTodo(e) {
+async function addTodo(e) {
     e.preventDefault();
 
     const title = titleInput.value.trim();
@@ -157,7 +489,7 @@ function addTodo(e) {
         completed: false
     };
 
-    saveLocal(todoObj);
+    await saveLocal(todoObj);
     renderTodos();
 
     // Reset inputs
@@ -281,7 +613,7 @@ function formatDate(dateStr) {
 }
 
 // Handle Actions (Check, Edit, Delete)
-function handleAction(e) {
+async function handleAction(e) {
     const btn = e.target.closest(".act-btn");
     if (!btn) return;
 
@@ -294,19 +626,28 @@ function handleAction(e) {
         showConfirmModal(
             "Hapus Kegiatan",
             `Apakah Anda yakin ingin menghapus "${todo.title}"?`,
-            () => {
-                todos = todos.filter(t => t.id !== id);
-                localStorage.setItem("todos", JSON.stringify(todos));
-                renderTodos();
+            async () => {
+                if (currentUser) {
+                    await deleteDoc(doc(db, "users", currentUser.uid, "todos", id.toString()));
+                } else {
+                    todos = todos.filter(t => t.id !== id);
+                    localStorage.setItem("todos", JSON.stringify(todos));
+                    renderTodos();
+                }
             }
         );
     }
 
     if (btn.classList.contains("check")) {
-        const idx = todos.findIndex(t => t.id === id);
-        todos[idx].completed = !todos[idx].completed;
-        localStorage.setItem("todos", JSON.stringify(todos));
-        renderTodos();
+        const todo = todos.find(t => t.id === id);
+        if (currentUser) {
+            await setDoc(doc(db, "users", currentUser.uid, "todos", id.toString()), { completed: !todo.completed }, { merge: true });
+        } else {
+            const idx = todos.findIndex(t => t.id === id);
+            todos[idx].completed = !todos[idx].completed;
+            localStorage.setItem("todos", JSON.stringify(todos));
+            renderTodos();
+        }
     }
 
     if (btn.classList.contains("edit")) {
@@ -335,7 +676,7 @@ function closeEditModal() {
 editModalClose.addEventListener("click", closeEditModal);
 editModalCancel.addEventListener("click", closeEditModal);
 
-editModalSave.addEventListener("click", () => {
+editModalSave.addEventListener("click", async () => {
     const title = editTitleInput.value.trim();
     const desc = editDescInput.value.trim();
     const start = editStartInput.value;
@@ -353,17 +694,27 @@ editModalSave.addEventListener("click", () => {
         return;
     }
 
-    let todos = getLocal();
-    const idx = todos.findIndex(t => t.id === editingTodoId);
-    if (idx !== -1) {
-        todos[idx].title = title;
-        todos[idx].desc = desc;
-        todos[idx].start = start;
-        todos[idx].due = due;
-        todos[idx].priority = priority;
+    if (currentUser) {
+        await setDoc(doc(db, "users", currentUser.uid, "todos", editingTodoId.toString()), {
+            title,
+            desc,
+            start,
+            due,
+            priority
+        }, { merge: true });
+    } else {
+        let todos = getLocal();
+        const idx = todos.findIndex(t => t.id === editingTodoId);
+        if (idx !== -1) {
+            todos[idx].title = title;
+            todos[idx].desc = desc;
+            todos[idx].start = start;
+            todos[idx].due = due;
+            todos[idx].priority = priority;
 
-        localStorage.setItem("todos", JSON.stringify(todos));
-        renderTodos();
+            localStorage.setItem("todos", JSON.stringify(todos));
+            renderTodos();
+        }
     }
     
     closeEditModal();
@@ -377,9 +728,19 @@ function handleDeleteAll() {
     showConfirmModal(
         "Hapus Semua Kegiatan",
         "Apakah Anda yakin ingin menghapus SEMUA daftar kegiatan? Tindakan ini tidak dapat dibatalkan.",
-        () => {
-            localStorage.setItem("todos", JSON.stringify([]));
-            renderTodos();
+        async () => {
+            if (currentUser) {
+                const todosRef = collection(db, "users", currentUser.uid, "todos");
+                const querySnapshot = await getDocs(todosRef);
+                const batchPromises = [];
+                querySnapshot.forEach(doc => {
+                    batchPromises.push(deleteDoc(doc.ref));
+                });
+                await Promise.all(batchPromises);
+            } else {
+                localStorage.setItem("todos", JSON.stringify([]));
+                renderTodos();
+            }
         }
     );
 }
@@ -410,12 +771,19 @@ function updateProgress(todos) {
 }
 
 // Local Storage Helpers
-function saveLocal(todo) {
-    let todos = getLocal();
-    todos.push(todo);
-    localStorage.setItem("todos", JSON.stringify(todos));
+async function saveLocal(todo) {
+    if (currentUser) {
+        await setDoc(doc(db, "users", currentUser.uid, "todos", todo.id.toString()), todo);
+    } else {
+        let todos = getLocal();
+        todos.push(todo);
+        localStorage.setItem("todos", JSON.stringify(todos));
+    }
 }
 
 function getLocal() {
+    if (currentUser) {
+        return currentCloudTodos;
+    }
     return localStorage.getItem("todos") ? JSON.parse(localStorage.getItem("todos")) : [];
 }
